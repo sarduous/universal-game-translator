@@ -1,0 +1,91 @@
+# ==============================================================================
+# Universal AI Game Localization Framework - .gitignore
+# ==============================================================================
+
+# Python & Virtual Environments
+venv/
+env/
+.venv/
+ENV/
+env.bak/
+venv.bak/
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyd
+*.pyo
+
+# Packaging & Distribution
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Environment Variables & API Keys (Security)
+.env
+*.env
+.env.*
+!.env.example
+secrets.json
+api_keys.json
+
+# Workspace, Game Extraction & Temporary Files
+workspace/
+workspaces/
+temp/
+tmp/
+output/
+outputs/
+data/raw/
+data/unpacked/
+data/translated/
+*.pak
+*.msg
+*.json.tmp
+*.tmp
+*.bak
+*.swp
+*~
+
+# Test & Debug Artifacts
+tests/test_output/
+*.log
+logs/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE / Editor Configurations
+.vscode/
+!.vscode/settings.json.example
+.idea/
+*.sublime-project
+*.sublime-workspace
+.project
+.pydevproject
+.settings/
+
+# Operating System Files
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+[Dd]esktop.ini
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
