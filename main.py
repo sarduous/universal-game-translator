@@ -192,14 +192,19 @@ def main():
     # ADIM 2: JSON'a Aktar (Export to JSON)
     logger.info("--- ADIM 2: Ham Metinler JSON Formatına Dönüştürülüyor ---")
     if unpacked_dir.exists():
-        adapter.export_to_json(str(unpacked_dir), str(exported_json_dir))
+        success = adapter.export_to_json(str(unpacked_dir), str(exported_json_dir))
+        if not success:
+            logger.error(f"Adım 2/5 (MSG -> JSON Aktarma) başarısız oldu:\n{getattr(adapter, 'last_error', '')}")
+            sys.exit(1)
     else:
-        logger.warning(f"Unpacked klasörü bulunamadı: {unpacked_dir}")
+        logger.error(f"Adım 2/5 Başarısız: Unpacked klasörü bulunamadı: {unpacked_dir}")
+        sys.exit(1)
 
     # ADIM 3: Çekirdek Çeviri Motoru (Core Translation)
     if not args.skip_translate:
         logger.info("--- ADIM 3: Çekirdek Çeviri Motoru Çalıştırılıyor (Mask + Cache + Batch LLM) ---")
-        if exported_json_dir.exists():
+        json_files = list(exported_json_dir.rglob("*.json")) if exported_json_dir.exists() else []
+        if json_files:
             process_json_directory(
                 exported_json_dir, 
                 translated_json_dir, 
@@ -208,7 +213,8 @@ def main():
                 batch_size=args.batch_size
             )
         else:
-            logger.warning(f"Dışarı aktarılmış JSON klasörü bulunamadı: {exported_json_dir}")
+            logger.error(f"Adım 3/5 Başarısız: Çevrilecek JSON dosyası bulunamadı ({exported_json_dir})!")
+            sys.exit(1)
     else:
         logger.info("--- ADIM 3: Çeviri adımı atlandı. ---")
 
@@ -216,14 +222,26 @@ def main():
     logger.info("--- ADIM 4: Çevrilmiş JSON'lar İkili Formata (MSG) Derleniyor ---")
     source_json_dir = translated_json_dir if translated_json_dir.exists() else exported_json_dir
     if source_json_dir.exists():
-        adapter.import_from_json(str(source_json_dir), str(compiled_msg_dir), original_msg_dir=str(unpacked_dir) if unpacked_dir.exists() else None)
+        success = adapter.import_from_json(str(source_json_dir), str(compiled_msg_dir), original_msg_dir=str(unpacked_dir) if unpacked_dir.exists() else None)
+        if not success:
+            logger.error(f"Adım 4/5 (JSON -> MSG Derleme) başarısız oldu:\n{getattr(adapter, 'last_error', '')}")
+            sys.exit(1)
+    else:
+        logger.error(f"Adım 4/5 Başarısız: Derlenecek JSON kaynak klasörü bulunamadı: {source_json_dir}")
+        sys.exit(1)
 
     # ADIM 5: Mod Paketini Hazırla (Build Mod Package)
     logger.info("--- ADIM 5: Mod Paketi Yapılandırılıyor ---")
     if compiled_msg_dir.exists():
-        adapter.build_mod_package(str(compiled_msg_dir), str(mod_output_dir))
+        success = adapter.build_mod_package(str(compiled_msg_dir), str(mod_output_dir))
+        if not success:
+            logger.error(f"Adım 5/5 (Mod Paketleme) başarısız oldu:\n{getattr(adapter, 'last_error', '')}")
+            sys.exit(1)
+    else:
+        logger.error(f"Adım 5/5 Başarısız: Derlenmiş mesaj klasörü bulunamadı: {compiled_msg_dir}")
+        sys.exit(1)
 
-    logger.info("=== BÜTÜN İŞLEMLER BAŞARIYLA TAMAMLATILDI ===")
+    logger.info("=== BÜTÜN İŞLEMLER BAŞARIYLA TAMAMLANDI ===")
 
 
 if __name__ == "__main__":

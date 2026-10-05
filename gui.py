@@ -13,12 +13,46 @@ from dotenv import load_dotenv
 
 from core.sanitizer import mask_tags, unmask_tags, safe_font_convert
 from core.cache import TranslationCache
-from core.translator import GeminiTranslator
+from core.translator import GeminiTranslator, is_valid_gemini_key, ENV_PATH
 from adapters.re_engine import REEngineAdapter
 from adapters.base import BaseEngineAdapter
 
-# .env yükle
-load_dotenv()
+# .env yükle (Kesin mutlak yol ile)
+load_dotenv(dotenv_path=ENV_PATH, override=True)
+
+
+def save_api_key_to_env(api_key: str) -> bool:
+    """
+    GEMINI_API_KEY değerini ana dizindeki .env dosyasına güvenle yazar veya günceller.
+    Mevcut diğer satırları ve dosya yapısını korur.
+    """
+    api_key = api_key.strip()
+    lines = []
+    found = False
+
+    if ENV_PATH.exists():
+        with open(ENV_PATH, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+    new_lines = []
+    for line in lines:
+        if line.strip().startswith("GEMINI_API_KEY="):
+            new_lines.append(f"GEMINI_API_KEY={api_key}\n")
+            found = True
+        else:
+            new_lines.append(line)
+
+    if not found:
+        if new_lines and not new_lines[-1].endswith("\n"):
+            new_lines.append("\n")
+        new_lines.append(f"GEMINI_API_KEY={api_key}\n")
+
+    with open(ENV_PATH, "w", encoding="utf-8") as f:
+        f.writelines(new_lines)
+
+    os.environ["GEMINI_API_KEY"] = api_key
+    load_dotenv(dotenv_path=ENV_PATH, override=True)
+    return True
 
 # CustomTkinter varsayılan görünüm (Koyu Tema)
 ctk.set_appearance_mode("Dark")
@@ -224,7 +258,9 @@ class App(ctk.CTk):
             border_color="#2A1B1F"
         )
         options_frame.grid(row=2, column=0, padx=15, pady=5, sticky="ew")
-        options_frame.grid_columnconfigure(1, weight=1)
+        options_frame.grid_columnconfigure(0, weight=1)
+        options_frame.grid_columnconfigure(1, weight=0)
+        options_frame.grid_columnconfigure(2, weight=0)
 
         # Font Güvenli Mod Checkbox
         self.font_safe_var = ctk.BooleanVar(value=False)
@@ -241,21 +277,75 @@ class App(ctk.CTk):
         self.font_safe_checkbox.grid(row=0, column=0, padx=15, pady=10, sticky="w")
 
         # API Durumu Etiketi
-        api_key = os.getenv("GEMINI_API_KEY")
-        if api_key and api_key != "your_key_here":
-            api_status_text = "🟢 Gemini API Key Tanımlı (Hazır)"
-            api_status_color = "#50FA7B"
-        else:
-            api_status_text = "🔴 Gemini API Key Bulunamadı (Mock Modu)"
-            api_status_color = "#FF5555"
-
         self.api_status_label = ctk.CTkLabel(
             options_frame, 
-            text=api_status_text, 
-            font=ctk.CTkFont(size=12, weight="bold"),
-            text_color=api_status_color
+            text="", 
+            font=ctk.CTkFont(size=12, weight="bold")
         )
-        self.api_status_label.grid(row=0, column=1, padx=15, pady=10, sticky="e")
+        self.api_status_label.grid(row=0, column=1, padx=(10, 8), pady=10, sticky="e")
+
+        # API Key Tanımla Butonu
+        self.api_key_btn = ctk.CTkButton(
+            options_frame,
+            text="🔑 API Key Gir",
+            width=110,
+            height=28,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            fg_color="#2B181C",
+            hover_color="#422026",
+            text_color=COLOR_ACCENT,
+            border_width=1,
+            border_color="#52222B",
+            command=self._prompt_api_key_dialog
+        )
+        self.api_key_btn.grid(row=0, column=2, padx=(0, 15), pady=10, sticky="e")
+
+        # İlk durum kontrolü
+        self._update_api_status()
+
+    def _update_api_status(self):
+        """
+        .env dosyasını yeniden okuyarak API anahtarının durumunu ve rengini günceller.
+        """
+        load_dotenv(dotenv_path=ENV_PATH, override=True)
+        api_key = os.getenv("GEMINI_API_KEY", "")
+        if is_valid_gemini_key(api_key):
+            self.api_status_label.configure(
+                text="🟢 Gemini API Key Hazır",
+                text_color="#50FA7B"
+            )
+        else:
+            self.api_status_label.configure(
+                text="🔴 Gemini API Key Bulunamadı (Mock Modu)",
+                text_color="#FF5555"
+            )
+
+    def _prompt_api_key_dialog(self):
+        """
+        Kullanıcıdan Gemini API anahtarını güvenli bir iletişim kutusu ile alır ve .env'ye kaydeder.
+        """
+        dialog = ctk.CTkInputDialog(
+            text="Google Gemini API anahtarınızı girin:\n(Örnek: AIzaSy...)",
+            title="Gemini API Anahtarı Yapılandırma"
+        )
+        entered_key = dialog.get_input()
+        if entered_key is not None:
+            entered_key = entered_key.strip()
+            if not is_valid_gemini_key(entered_key):
+                messagebox.showerror(
+                    "Geçersiz Anahtar",
+                    "Girdiğiniz API anahtarı geçersiz veya yer tutucu (placeholder) biçiminde!\nLütfen Google AI Studio'dan aldığınız geçerli anahtarı girin."
+                )
+                return
+
+            save_api_key_to_env(entered_key)
+            self._update_api_status()
+            self.logger.info("Gemini API Anahtarı .env dosyasına başarıyla kaydedildi ve arayüze bağlandı.")
+            messagebox.showinfo(
+                "Başarılı",
+                "Gemini API Anahtarınız .env dosyasına kaydedildi!\nDurum: 🟢 Gemini API Key Hazır"
+            )
+
 
     def _build_progress_and_log_section(self):
         progress_frame = ctk.CTkFrame(
@@ -377,51 +467,75 @@ class App(ctk.CTk):
 
             # ADIM 1: PAK Çıkarma (0.15)
             self._set_status("📦 1/5: PAK arşivi açılıyor...", 0.15)
-            self.logger.info("PAK Arşivi açılıyor...")
+            self.logger.info("--- [ADIM 1/5] PAK Arşivi Açılıyor ---")
             success = adapter.extract_archive(pak_path, str(unpacked_dir), list_file=list_file)
             if not success:
-                raise Exception("PAK arşivi açılırken hata oluştu!")
+                err_detail = getattr(adapter, 'last_error', '') or "PAK arşivinden dosyalar çıkarılamadı."
+                raise RuntimeError(f"[Adım 1/5: PAK Çıkarma Başarısız]\n\n{err_detail}")
 
             # ADIM 2: JSON'a Aktarma (0.35)
             self._set_status("📄 2/5: Metinler JSON formatına aktarılıyor...", 0.35)
-            self.logger.info("Ham metinler JSON'a aktarılıyor...")
-            adapter.export_to_json(str(unpacked_dir), str(exported_json_dir))
+            self.logger.info("--- [ADIM 2/5] Ham Metinler JSON Formatına Aktarılıyor ---")
+            success = adapter.export_to_json(str(unpacked_dir), str(exported_json_dir))
+            if not success:
+                err_detail = getattr(adapter, 'last_error', '') or "Metinler JSON formatına aktarılamadı."
+                raise RuntimeError(f"[Adım 2/5: MSG -> JSON Aktarma Başarısız]\n\n{err_detail}")
 
             # ADIM 3: Çeviri (0.70)
             self._set_status("💬 3/5: Otomatik diyalog çevirisi yapılıyor...", 0.70)
-            self.logger.info("Çekirdek çeviri motoru çalıştırılıyor...")
+            self.logger.info("--- [ADIM 3/5] Otomatik Diyalog Çevirisi Başlatılıyor ---")
             
+            json_files = list(exported_json_dir.rglob("*.json"))
+            if not json_files:
+                raise RuntimeError(
+                    "[Adım 3/5: Çeviri Başarısız]\n\n"
+                    f"Çevrilecek hiçbir JSON metin dosyası bulunamadı ({exported_json_dir})!\n"
+                    "Lütfen PAK dosyasının metin içerdiğinden ve arşivin doğru açıldığından emin olun."
+                )
+
             with TranslationCache("translation_cache.db") as cache:
-                json_files = list(exported_json_dir.rglob("*.json"))
-                for json_file in json_files:
-                    with open(json_file, "r", encoding="utf-8") as f:
-                        data = json.load(f)
+                total_files = len(json_files)
+                for idx, json_file in enumerate(json_files, 1):
+                    self.logger.info(f"Metin Dosyası İşleniyor ({idx}/{total_files}): {json_file.name}")
+                    try:
+                        with open(json_file, "r", encoding="utf-8") as f:
+                            data = json.load(f)
 
-                    # Çeviri işlemi
-                    translated_data = self._translate_json_data(data, translator, cache, font_safe)
+                        # Çeviri işlemi
+                        translated_data = self._translate_json_data(data, translator, cache, font_safe)
 
-                    rel_path = json_file.relative_to(exported_json_dir)
-                    out_file = translated_json_dir / rel_path
-                    out_file.parent.mkdir(parents=True, exist_ok=True)
+                        rel_path = json_file.relative_to(exported_json_dir)
+                        out_file = translated_json_dir / rel_path
+                        out_file.parent.mkdir(parents=True, exist_ok=True)
 
-                    with open(out_file, "w", encoding="utf-8") as f:
-                        json.dump(translated_data, f, ensure_ascii=False, indent=2)
+                        with open(out_file, "w", encoding="utf-8") as f:
+                            json.dump(translated_data, f, ensure_ascii=False, indent=2)
+                    except Exception as e:
+                        raise RuntimeError(f"[Adım 3/5: Çeviri Başarısız]\n\nDosya: {json_file.name}\nHata Detayı: {e}")
 
             # ADIM 4: MSG Derleme (0.85)
             self._set_status("⚙️ 4/5: Çevrilmiş metinler ikili formata (MSG) derleniyor...", 0.85)
-            self.logger.info("JSON -> MSG derleme başlatılıyor...")
-            adapter.import_from_json(str(translated_json_dir), str(compiled_msg_dir), original_msg_dir=str(unpacked_dir))
+            self.logger.info("--- [ADIM 4/5] JSON -> MSG Derleme Başlatılıyor ---")
+            success = adapter.import_from_json(str(translated_json_dir), str(compiled_msg_dir), original_msg_dir=str(unpacked_dir))
+            if not success:
+                err_detail = getattr(adapter, 'last_error', '') or "Çevrilmiş JSON dosyaları MSG formatına derlenemedi."
+                raise RuntimeError(f"[Adım 4/5: JSON -> MSG Derleme Başarısız]\n\n{err_detail}")
 
             # ADIM 5: Mod Paketi Oluşturma (1.00)
             self._set_status("🎁 5/5: Mod paketi oluşturuluyor...", 1.00)
-            self.logger.info("Mod paketi yapılandırılıyor...")
-            adapter.build_mod_package(str(compiled_msg_dir), str(mod_output_dir))
+            self.logger.info("--- [ADIM 5/5] Mod Paketi Yapılandırılıyor ---")
+            success = adapter.build_mod_package(str(compiled_msg_dir), str(mod_output_dir))
+            if not success:
+                err_detail = getattr(adapter, 'last_error', '') or "Mod paketi oluşturulamadı."
+                raise RuntimeError(f"[Adım 5/5: Mod Paketleme Başarısız]\n\n{err_detail}")
 
+            # Sadece tüm adımlar başarılıysa çağrılır
             self.after(0, lambda: self._on_pipeline_success(str(mod_output_dir)))
 
         except Exception as e:
-            self.logger.error(f"Hata oluştu: {e}")
-            self.after(0, lambda: self._on_pipeline_error(str(e)))
+            err_msg = str(e)
+            self.logger.error(f"Pipeline durduruldu: {err_msg}")
+            self.after(0, lambda: self._on_pipeline_error(err_msg))
 
     def _translate_json_data(self, json_data, translator, cache, font_safe: bool):
         extracted_strings = []
@@ -485,7 +599,10 @@ class App(ctk.CTk):
         self.pipeline_running = False
         self.start_btn.configure(state="normal", text="🚀 Çeviriyi ve Modlamayı Başlat")
         self._set_status("❌ İşlem Başarısız Oldu!", 0.0)
-        messagebox.showerror("Hata", f"İşlem sırasında bir hata oluştu:\n{err_msg}")
+        messagebox.showerror(
+            "Pipeline Hatası - İşlem Durduruldu", 
+            f"İşlem sırasında bir hata oluştu ve süreç durduruldu:\n\n{err_msg}"
+        )
 
 
 if __name__ == "__main__":

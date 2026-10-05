@@ -4,3 +4,5 @@ tqdm
 python-dotenv
 customtkinter
 pillow
+mmh3
+chardet

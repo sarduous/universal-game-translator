@@ -3,11 +3,37 @@ import json
 import time
 import logging
 from typing import List, Optional
+from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
+ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(dotenv_path=ENV_PATH, override=True)
 
 logger = logging.getLogger(__name__)
+
+INVALID_KEY_PLACEHOLDERS = {
+    "",
+    "your_key_here",
+    "BURAYA_API_KEY_GELECEK",
+    "YOUR_GEMINI_API_KEY",
+    "AIzaSyYourKeyHere"
+}
+
+
+def is_valid_gemini_key(key: Optional[str]) -> bool:
+    """
+    Verilen Gemini API anahtarının geçerli bir yapıda olup olmadığını kontrol eder.
+    Yer tutucu (placeholder) veya boş değerleri geçersiz kabul eder.
+    """
+    if not key or not isinstance(key, str):
+        return False
+    key = key.strip()
+    if key in INVALID_KEY_PLACEHOLDERS:
+        return False
+    if len(key) < 15 or " " in key or "\n" in key:
+        return False
+    return True
+
 
 SYSTEM_PROMPT = """Sen feodal Japonya / Samuray temalı epik bir aksiyon video oyununun kıdemli Türkçe yerelleştirme uzmanısın.
 Görevin, sana verilen İngilizce oyun diyaloglarını ve arayüz metinlerini Türkçeye çevirmektir.
@@ -27,19 +53,32 @@ class GeminiTranslator:
     Google GenAI SDK kullanarak diyalogları paketler (batch) halinde Türkçeye çeviren LLM motoru.
     """
 
-    def __init__(self, api_key: Optional[str] = None, model_name: str = "gemini-2.5-flash"):
+    def __init__(self, api_key: Optional[str] = None, model_name: Optional[str] = None):
+        # En güncel .env değerini belleğe al
+        load_dotenv(dotenv_path=ENV_PATH, override=True)
         self.api_key = api_key or os.getenv("GEMINI_API_KEY")
-        self.model_name = model_name
+
+        # gemini-1.5-flash v1beta API'sinde 404 döndürdüğü ve gemini-2.5-flash günlük 20 istek sınırı olduğu için,
+        # ücretsiz planda yüksek kotalı aktif model gemini-2.5-flash-lite kullanılır.
+        env_model = os.getenv("GEMINI_MODEL")
+        chosen_model = model_name or env_model or "gemini-2.5-flash-lite"
+        if chosen_model in ("gemini-1.5-flash", "models/gemini-1.5-flash"):
+            # 1.5-flash API'den kaldırıldığı için otomatik olarak yüksek kotalı flash-lite'a eşle
+            self.model_name = "gemini-2.5-flash-lite"
+        else:
+            self.model_name = chosen_model
+
         self.client = None
 
-        if self.api_key and self.api_key != "your_key_here":
+        if is_valid_gemini_key(self.api_key):
             try:
                 from google import genai
                 self.client = genai.Client(api_key=self.api_key)
+                logger.info(f"Google GenAI Client başarıyla başlatıldı (Model: {self.model_name}).")
             except Exception as e:
                 logger.warning(f"Google GenAI Client başlatılamadı: {e}")
         else:
-            logger.info("GEMINI_API_KEY bulunamadı veya varsayılan değerde. Çevirici Mock (simülasyon) modunda çalışacak.")
+            logger.info("Geçerli bir GEMINI_API_KEY bulunamadı veya varsayılan değerde. Çevirici Mock (simülasyon) modunda çalışacak.")
 
     def translate_batch(
         self, 
@@ -112,7 +151,14 @@ class GeminiTranslator:
                     )
 
             except Exception as e:
-                logger.error(f"Gemini API Hatası (Deneme {attempt}/{max_retries}): {e}")
+                err_str = str(e)
+                logger.error(f"Gemini API Hatası (Model: {self.model_name}, Deneme {attempt}/{max_retries}): {e}")
+
+                # Kota (429) veya model bulunamadı (404) hatasında yüksek kotalı lite modeline geç
+                if ("404" in err_str or "NOT_FOUND" in err_str or "429" in err_str or "RESOURCE_EXHAUSTED" in err_str) and self.model_name != "gemini-2.5-flash-lite":
+                    logger.warning(f"'{self.model_name}' modelinde kota/erişim hatası. 'gemini-2.5-flash-lite' modeline geçiliyor...")
+                    self.model_name = "gemini-2.5-flash-lite"
+
                 if attempt < max_retries:
                     time.sleep(retry_delay * (2 ** (attempt - 1)))  # Exponential backoff
 
