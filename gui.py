@@ -20,9 +20,22 @@ from adapters.base import BaseEngineAdapter
 # .env yükle
 load_dotenv()
 
-# CustomTkinter varsayılan görünüm
+# CustomTkinter varsayılan görünüm (Koyu Tema)
 ctk.set_appearance_mode("Dark")
-ctk.set_default_color_theme("blue")
+ctk.set_default_color_theme("dark-blue")
+
+# Kırmızı & Siyah Teması Renk Paleti (Samurai Crimson & Obsidian Black)
+COLOR_BG = "#0D0D11"          # Ana Pencere Arka Planı (Derin Siyah)
+COLOR_CARD = "#14141A"        # Kart/Çerçeve Arka Planı
+COLOR_HEADER = "#1A0F12"      # Başlık Alanı Arka Planı
+COLOR_TEXT_MAIN = "#F5F5F7"   # Ana Metin (Parlak Beyaz)
+COLOR_TEXT_MUTED = "#A0A0B0"  # İkincil Metin (Gri)
+COLOR_CRIMSON = "#D32F2F"     # Ana Kırmızı (Crimson Red)
+COLOR_CRIMSON_HOVER = "#B71C1C" # Buton Hover Kırmızı
+COLOR_ACCENT = "#FF3344"      # Canlı Vurgu Kırmızı
+COLOR_INPUT_BG = "#1A1A22"    # Input Kutuları Arka Planı
+COLOR_LOG_BG = "#08080A"      # Konsol Siyah Arka Planı
+COLOR_LOG_TEXT = "#E0D5D7"    # Konsol Metni
 
 
 class TextboxLogHandler(logging.Handler):
@@ -42,9 +55,18 @@ class App(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title("Universal AI Game Translator - Modern GUI")
-        self.geometry("860x740")
-        self.minsize(800, 680)
+        self.title("Universal AI Game Translator")
+        self.geometry("880x760")
+        self.minsize(820, 700)
+        self.configure(fg_color=COLOR_BG)
+
+        # Uygulama İkonu Ayarla (Kırmızı-Siyah 'S' Logosu)
+        icon_path = Path(__file__).parent / "assets" / "app_icon.ico"
+        if icon_path.exists():
+            try:
+                self.iconbitmap(str(icon_path))
+            except Exception:
+                pass
 
         self.log_queue = queue.Queue()
         self.pipeline_running = False
@@ -73,67 +95,134 @@ class App(ctk.CTk):
         self.logger.addHandler(handler)
 
     def _build_header(self):
-        header_frame = ctk.CTkFrame(self, corner_radius=10, fg_color="#1E1E2E")
+        header_frame = ctk.CTkFrame(
+            self, 
+            corner_radius=12, 
+            fg_color=COLOR_HEADER,
+            border_width=1,
+            border_color="#3D1418"
+        )
         header_frame.grid(row=0, column=0, padx=15, pady=(15, 10), sticky="ew")
-        header_frame.grid_columnconfigure(0, weight=1)
+        header_frame.grid_columnconfigure(1, weight=1)
+
+        # 'S' Logosu Görseli
+        png_path = Path(__file__).parent / "assets" / "app_icon.png"
+        if png_path.exists():
+            try:
+                from PIL import Image
+                logo_img = ctk.CTkImage(light_image=Image.open(png_path), dark_image=Image.open(png_path), size=(40, 40))
+                logo_label = ctk.CTkLabel(header_frame, image=logo_img, text="")
+                logo_label.grid(row=0, column=0, rowspan=2, padx=(15, 5), pady=10)
+            except Exception:
+                pass
 
         title_label = ctk.CTkLabel(
             header_frame, 
-            text="⚔️ Universal AI Game Translator", 
+            text="Universal Game Translator", 
             font=ctk.CTkFont(size=22, weight="bold"),
-            text_color="#89B4FA"
+            text_color=COLOR_ACCENT
         )
-        title_label.grid(row=0, column=0, padx=15, pady=(10, 2), sticky="w")
-
-        subtitle_label = ctk.CTkLabel(
-            header_frame, 
-            text="Yapay Zeka Destekli Otomatik Oyun Yerelleştirme ve Modlama Platformu", 
-            font=ctk.CTkFont(size=12),
-            text_color="#CDD6F4"
-        )
-        subtitle_label.grid(row=1, column=0, padx=15, pady=(0, 10), sticky="w")
+        title_label.grid(row=0, column=1, padx=10, pady=15, sticky="w")
 
     def _build_engine_section(self):
-        engine_frame = ctk.CTkFrame(self, corner_radius=10)
+        engine_frame = ctk.CTkFrame(
+            self, 
+            corner_radius=12, 
+            fg_color=COLOR_CARD,
+            border_width=1,
+            border_color="#2A1B1F"
+        )
         engine_frame.grid(row=1, column=0, padx=15, pady=5, sticky="ew")
         engine_frame.grid_columnconfigure(1, weight=1)
 
         # Başlık
-        sec_title = ctk.CTkLabel(engine_frame, text="🎮 Oyun ve Motor Yapılandırması", font=ctk.CTkFont(size=14, weight="bold"))
+        sec_title = ctk.CTkLabel(
+            engine_frame, 
+            text="🎮 Oyun ve Motor Yapılandırması", 
+            font=ctk.CTkFont(size=14, weight="bold"),
+            text_color=COLOR_ACCENT
+        )
         sec_title.grid(row=0, column=0, columnspan=3, padx=15, pady=(10, 5), sticky="w")
 
         # Motor Seçimi Dropdown
-        ctk.CTkLabel(engine_frame, text="Oyun Motoru:").grid(row=1, column=0, padx=15, pady=5, sticky="w")
+        ctk.CTkLabel(engine_frame, text="Oyun Motoru:", text_color=COLOR_TEXT_MAIN).grid(row=1, column=0, padx=15, pady=5, sticky="w")
         self.engine_dropdown = ctk.CTkOptionMenu(
             engine_frame, 
-            values=["RE Engine (Capcom)", "Unreal Engine (Yakında)", "Unity (Yakında)"]
+            values=["RE Engine (Capcom)", "Unreal Engine (Yakında)", "Unity (Yakında)"],
+            fg_color="#2B161B",
+            button_color=COLOR_CRIMSON,
+            button_hover_color=COLOR_CRIMSON_HOVER,
+            dropdown_fg_color="#1E1215",
+            text_color=COLOR_TEXT_MAIN
         )
         self.engine_dropdown.grid(row=1, column=1, columnspan=2, padx=15, pady=5, sticky="ew")
         self.engine_dropdown.set("RE Engine (Capcom)")
 
         # PAK Arşiv Seçimi
-        ctk.CTkLabel(engine_frame, text="PAK / Arşiv Dosyası:").grid(row=2, column=0, padx=15, pady=5, sticky="w")
-        self.pak_entry = ctk.CTkEntry(engine_frame, placeholder_text="Oyun .pak dosya yolunu seçin...")
+        ctk.CTkLabel(engine_frame, text="PAK / Arşiv Dosyası:", text_color=COLOR_TEXT_MAIN).grid(row=2, column=0, padx=15, pady=5, sticky="w")
+        self.pak_entry = ctk.CTkEntry(
+            engine_frame, 
+            placeholder_text="Oyun .pak dosya yolunu seçin...",
+            fg_color=COLOR_INPUT_BG,
+            border_color="#332226",
+            text_color=COLOR_TEXT_MAIN
+        )
         self.pak_entry.grid(row=2, column=1, padx=(15, 5), pady=5, sticky="ew")
-        self.pak_browse_btn = ctk.CTkButton(engine_frame, text="Gözat...", width=90, command=self._browse_pak_file)
+        self.pak_browse_btn = ctk.CTkButton(
+            engine_frame, 
+            text="Gözat...", 
+            width=90, 
+            fg_color="#2B181C",
+            hover_color="#422026",
+            text_color=COLOR_ACCENT,
+            border_width=1,
+            border_color="#52222B",
+            command=self._browse_pak_file
+        )
         self.pak_browse_btn.grid(row=2, column=2, padx=(5, 15), pady=5)
 
         # Proje / Liste Etiketi
-        ctk.CTkLabel(engine_frame, text="Proje / Liste Etiketi:").grid(row=3, column=0, padx=15, pady=5, sticky="w")
-        self.list_file_entry = ctk.CTkEntry(engine_frame)
+        ctk.CTkLabel(engine_frame, text="Proje / Liste Etiketi:", text_color=COLOR_TEXT_MAIN).grid(row=3, column=0, padx=15, pady=5, sticky="w")
+        self.list_file_entry = ctk.CTkEntry(
+            engine_frame,
+            fg_color=COLOR_INPUT_BG,
+            border_color="#332226",
+            text_color=COLOR_TEXT_MAIN
+        )
         self.list_file_entry.insert(0, "OWOTS_STM_Release")
         self.list_file_entry.grid(row=3, column=1, columnspan=2, padx=15, pady=5, sticky="ew")
 
         # Çıktı Klasörü Seçimi
-        ctk.CTkLabel(engine_frame, text="Çıktı Klasörü:").grid(row=4, column=0, padx=15, pady=5, sticky="w")
-        self.out_dir_entry = ctk.CTkEntry(engine_frame)
+        ctk.CTkLabel(engine_frame, text="Çıktı Klasörü:", text_color=COLOR_TEXT_MAIN).grid(row=4, column=0, padx=15, pady=5, sticky="w")
+        self.out_dir_entry = ctk.CTkEntry(
+            engine_frame,
+            fg_color=COLOR_INPUT_BG,
+            border_color="#332226",
+            text_color=COLOR_TEXT_MAIN
+        )
         self.out_dir_entry.insert(0, str(Path("./output").resolve()))
         self.out_dir_entry.grid(row=4, column=1, padx=(15, 5), pady=(5, 10), sticky="ew")
-        self.out_dir_browse_btn = ctk.CTkButton(engine_frame, text="Gözat...", width=90, command=self._browse_output_dir)
+        self.out_dir_browse_btn = ctk.CTkButton(
+            engine_frame, 
+            text="Gözat...", 
+            width=90, 
+            fg_color="#2B181C",
+            hover_color="#422026",
+            text_color=COLOR_ACCENT,
+            border_width=1,
+            border_color="#52222B",
+            command=self._browse_output_dir
+        )
         self.out_dir_browse_btn.grid(row=4, column=2, padx=(5, 15), pady=(5, 10))
 
     def _build_options_section(self):
-        options_frame = ctk.CTkFrame(self, corner_radius=10)
+        options_frame = ctk.CTkFrame(
+            self, 
+            corner_radius=12, 
+            fg_color=COLOR_CARD,
+            border_width=1,
+            border_color="#2A1B1F"
+        )
         options_frame.grid(row=2, column=0, padx=15, pady=5, sticky="ew")
         options_frame.grid_columnconfigure(1, weight=1)
 
@@ -143,7 +232,11 @@ class App(ctk.CTk):
             options_frame, 
             text="Font Güvenli Mod (Türkçe karakterleri güvenli harflere dönüştür: ç->c, ş->s vb.)",
             variable=self.font_safe_var,
-            font=ctk.CTkFont(size=12)
+            font=ctk.CTkFont(size=12),
+            fg_color=COLOR_CRIMSON,
+            hover_color=COLOR_CRIMSON_HOVER,
+            checkmark_color="#FFFFFF",
+            text_color=COLOR_TEXT_MAIN
         )
         self.font_safe_checkbox.grid(row=0, column=0, padx=15, pady=10, sticky="w")
 
@@ -151,10 +244,10 @@ class App(ctk.CTk):
         api_key = os.getenv("GEMINI_API_KEY")
         if api_key and api_key != "your_key_here":
             api_status_text = "🟢 Gemini API Key Tanımlı (Hazır)"
-            api_status_color = "#A6E3A1"
+            api_status_color = "#50FA7B"
         else:
-            api_status_text = "🔴 Gemini API Key Bulunamadı (Mock Simülasyonu Modu)"
-            api_status_color = "#F38BA8"
+            api_status_text = "🔴 Gemini API Key Bulunamadı (Mock Modu)"
+            api_status_color = "#FF5555"
 
         self.api_status_label = ctk.CTkLabel(
             options_frame, 
@@ -165,7 +258,13 @@ class App(ctk.CTk):
         self.api_status_label.grid(row=0, column=1, padx=15, pady=10, sticky="e")
 
     def _build_progress_and_log_section(self):
-        progress_frame = ctk.CTkFrame(self, corner_radius=10)
+        progress_frame = ctk.CTkFrame(
+            self, 
+            corner_radius=12, 
+            fg_color=COLOR_CARD,
+            border_width=1,
+            border_color="#2A1B1F"
+        )
         progress_frame.grid(row=3, column=0, padx=15, pady=5, sticky="nsew")
         progress_frame.grid_columnconfigure(0, weight=1)
         progress_frame.grid_rowconfigure(2, weight=1)
@@ -175,12 +274,16 @@ class App(ctk.CTk):
             progress_frame, 
             text="Hazır - İşlem başlatılmayı bekliyor...", 
             font=ctk.CTkFont(size=13, weight="bold"),
-            text_color="#89B4FA"
+            text_color=COLOR_ACCENT
         )
         self.status_label.grid(row=0, column=0, padx=15, pady=(10, 2), sticky="w")
 
         # İlerleme Çubuğu (Progress Bar)
-        self.progress_bar = ctk.CTkProgressBar(progress_frame)
+        self.progress_bar = ctk.CTkProgressBar(
+            progress_frame,
+            fg_color="#221418",
+            progress_color=COLOR_ACCENT
+        )
         self.progress_bar.grid(row=1, column=0, padx=15, pady=(2, 10), sticky="ew")
         self.progress_bar.set(0.0)
 
@@ -188,11 +291,13 @@ class App(ctk.CTk):
         self.log_textbox = ctk.CTkTextbox(
             progress_frame, 
             font=ctk.CTkFont(family="Consolas", size=11),
-            fg_color="#181825",
-            text_color="#A6ADC8"
+            fg_color=COLOR_LOG_BG,
+            text_color=COLOR_LOG_TEXT,
+            border_width=1,
+            border_color="#26181B"
         )
         self.log_textbox.grid(row=2, column=0, padx=15, pady=(0, 10), sticky="nsew")
-        self.log_textbox.insert("1.0", "--- Sistem Konsolu Başlatıldı ---\n")
+        self.log_textbox.insert("1.0", "--- Sistem Konsolu Başlatıldı (Kırmızı/Siyah Samurai Teması) ---\n")
         self.log_textbox.configure(state="disabled")
 
     def _build_action_button(self):
@@ -200,10 +305,11 @@ class App(ctk.CTk):
             self, 
             text="🚀 Çeviriyi ve Modlamayı Başlat", 
             font=ctk.CTkFont(size=16, weight="bold"),
-            height=45,
-            fg_color="#89B4FA",
-            hover_color="#74C7EC",
-            text_color="#11111B",
+            height=48,
+            fg_color=COLOR_CRIMSON,
+            hover_color=COLOR_CRIMSON_HOVER,
+            text_color="#FFFFFF",
+            corner_radius=10,
             command=self._start_pipeline_thread
         )
         self.start_btn.grid(row=4, column=0, padx=15, pady=15, sticky="ew")
@@ -249,7 +355,7 @@ class App(ctk.CTk):
             return
 
         self.pipeline_running = True
-        self.start_btn.configure(state="disabled", text="⏳ İşlem Sürüyor...")
+        self.start_btn.configure(state="disabled", text="⏳ İşlem Süyor...")
 
         thread = threading.Thread(target=self._run_pipeline_worker, args=(pak_path,), daemon=True)
         thread.start()
@@ -282,7 +388,7 @@ class App(ctk.CTk):
             adapter.export_to_json(str(unpacked_dir), str(exported_json_dir))
 
             # ADIM 3: Çeviri (0.70)
-            self._set_status("🤖 3/5: Yapay zeka diyalogları çeviriyor...", 0.70)
+            self._set_status("💬 3/5: Otomatik diyalog çevirisi yapılıyor...", 0.70)
             self.logger.info("Çekirdek çeviri motoru çalıştırılıyor...")
             
             with TranslationCache("translation_cache.db") as cache:
