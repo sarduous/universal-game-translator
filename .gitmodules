@@ -1,0 +1,3 @@
+[submodule "tools/REMSG_Converter"]
+	path = tools/REMSG_Converter
+	url = https://github.com/dtlnor/REMSG_Converter.git
