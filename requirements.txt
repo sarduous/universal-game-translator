@@ -2,3 +2,4 @@ google-genai
 openai
 tqdm
 python-dotenv
+customtkinter
