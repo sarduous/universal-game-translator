@@ -493,9 +493,19 @@ class App(ctk.CTk):
                     "Lütfen PAK dosyasının metin içerdiğinden ve arşivin doğru açıldığından emin olun."
                 )
 
-            with TranslationCache("translation_cache.db") as cache:
+            with TranslationCache() as cache:
                 total_files = len(json_files)
                 for idx, json_file in enumerate(json_files, 1):
+                    rel_path = json_file.relative_to(exported_json_dir)
+                    out_file = translated_json_dir / rel_path
+
+                    # Dosya seviyesinde resume: Çevrilmiş JSON zaten varsa ve içi doluysa atla
+                    if out_file.exists() and out_file.stat().st_size > 0:
+                        skip_msg = f"[INFO] {json_file.name} zaten çevrilmiş, atlanıyor."
+                        print(skip_msg)
+                        self.logger.info(skip_msg)
+                        continue
+
                     self.logger.info(f"Metin Dosyası İşleniyor ({idx}/{total_files}): {json_file.name}")
                     try:
                         with open(json_file, "r", encoding="utf-8") as f:
@@ -504,10 +514,7 @@ class App(ctk.CTk):
                         # Çeviri işlemi
                         translated_data = self._translate_json_data(data, translator, cache, font_safe)
 
-                        rel_path = json_file.relative_to(exported_json_dir)
-                        out_file = translated_json_dir / rel_path
                         out_file.parent.mkdir(parents=True, exist_ok=True)
-
                         with open(out_file, "w", encoding="utf-8") as f:
                             json.dump(translated_data, f, ensure_ascii=False, indent=2)
                     except Exception as e:
@@ -563,16 +570,23 @@ class App(ctk.CTk):
 
         to_translate = []
         to_translate_indices = []
+        cache_hits = 0
         for idx, item in enumerate(masked_items):
             cached = cache.get(item["masked"])
             if cached is not None:
                 item["translated_masked"] = cached
+                cache_hits += 1
             else:
                 to_translate.append(item["masked"])
                 to_translate_indices.append(idx)
 
+        if cache_hits > 0:
+            hit_msg = f"[INFO] [CACHE HIT] {cache_hits} satır önbellekten okundu (0 token)"
+            print(hit_msg)
+            self.logger.info(hit_msg)
+
         if to_translate:
-            translations = translator.translate_batch(to_translate, batch_size=20)
+            translations = translator.translate_batch(to_translate, batch_size=25)
             for idx, trans_text in zip(to_translate_indices, translations):
                 masked_items[idx]["translated_masked"] = trans_text
                 cache.set(masked_items[idx]["masked"], trans_text)

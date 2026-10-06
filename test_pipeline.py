@@ -29,29 +29,42 @@ def test_sanitizer():
 
 def test_cache():
     print("--- 2. MODÜL TESTİ: Translation Cache (Önbellekleme) ---")
+    
+    # 1. Varsayılan kalıcı konum testi: data/translations.db
+    with TranslationCache() as default_cache:
+        assert default_cache.db_path.name == "translations.db", "HATA: Veritabanı adı translations.db olmalı!"
+        assert default_cache.db_path.parent.name == "data", "HATA: Veritabanı 'data' klasöründe olmalı!"
+        assert default_cache.db_path.parent.exists(), "HATA: data/ klasörü oluşturulmamış!"
+        print(f"Varsayılan Kalıcı Önbellek Yolu Doğrulandı: {default_cache.db_path}")
+
+    # 2. Anlık commit ve bağlantı kapatıp tekrar açma testi
     cache_db = "test_cache.db"
     if os.path.exists(cache_db):
         os.remove(cache_db)
 
+    test_src = "Honor is true strength."
+    test_tr = "Onur, gerçek güçtür."
+
+    # İlk bağlantı: yaz ve kapat (commit testi)
     with TranslationCache(cache_db) as cache:
-        test_src = "Honor is true strength."
-        test_tr = "Onur, gerçek güçtür."
-
-        # Başlangıçta önbellek boş olmalı
         assert cache.get(test_src) is None, "HATA: Önbellek boş olmalıydı!"
-
-        # Kaydet ve tekrar sorgula
         cache.set(test_src, test_tr)
-        cached_val = cache.get(test_src)
-        assert cached_val == test_tr, f"HATA: Önbellekten yanlış değer döndü! ({cached_val})"
-
         print(f"Önbelleğe yazıldı: '{test_src}' -> '{test_tr}'")
-        print(f"Önbellekten okundu: '{test_src}' -> '{cached_val}'")
-        print(f"Toplam Önbellek Kayıt Sayısı: {cache.count()}")
+
+    # İkinci bağlantı: yeni nesne aç, veri diskte kalıcı mı kontrol et
+    with TranslationCache(cache_db) as cache_reopen:
+        cached_val = cache_reopen.get(test_src)
+        assert cached_val == test_tr, f"HATA: Yeniden açılan bağlantıda veri bulunamadı! ({cached_val})"
+        print(f"Yeniden başlatılan oturumda okundu: '{test_src}' -> '{cached_val}'")
+        
+        # get_batch ve log testi
+        batch_res = cache_reopen.get_batch([test_src, "Bilinmeyen Metin"])
+        assert test_src in batch_res, "HATA: get_batch beklenen anahtarı içermiyor!"
+        print(f"Toplam Önbellek Kayıt Sayısı: {cache_reopen.count()}")
 
     if os.path.exists(cache_db):
         os.remove(cache_db)
-    print("SUCCESS: Translation Cache (SQLite SHA-256) başarıyla geçti!\n")
+    print("SUCCESS: Translation Cache (Kalıcı SQLite & Anlık Commit) başarıyla geçti!\n")
 
 
 def test_full_pipeline():
@@ -109,7 +122,7 @@ def test_full_pipeline():
             # Step 3: Çevrilmeyenleri Paket (Batch) Halinde API / Motor Üzerinden Çevir
             if to_translate:
                 print(f"API/Translator'a Gönderilen Paket Boyutu: {len(to_translate)}")
-                translations = translator.translate_batch(to_translate, batch_size=20)
+                translations = translator.translate_batch(to_translate, batch_size=25)
                 
                 # Çevirileri Önbelleğe Kaydet ve Öğelere Ata
                 for idx, trans_text in zip(to_translate_indices, translations):
@@ -143,12 +156,54 @@ def test_full_pipeline():
     if os.path.exists(cache_db):
         os.remove(cache_db)
 
-    print("\n=======================================================")
-    print("  TÜM ÇEKİRDEK ÇEVİRİ MOTORU TESTLERİ BAŞARIYLA GEÇTİ! ")
-    print("=======================================================\n")
+
+def test_file_resume():
+    print("--- 4. ENTEGRASYON TESTİ: File-Level Resume (Zaten Çevrilmiş Dosyayı Atlama) ---")
+    import shutil
+    from main import process_json_directory
+
+    test_raw_dir = Path("tests/temp_raw")
+    test_tr_dir = Path("tests/temp_translated")
+    test_raw_dir.mkdir(parents=True, exist_ok=True)
+    test_tr_dir.mkdir(parents=True, exist_ok=True)
+
+    dummy_raw_file = test_raw_dir / "sample.json"
+    with open(dummy_raw_file, "w", encoding="utf-8") as f:
+        json.dump({"dialogue": "Original Text To Translate"}, f)
+
+    # Hedef dosya dolu olarak önceden oluşturuluyor
+    dummy_tr_file = test_tr_dir / "sample.json"
+    with open(dummy_tr_file, "w", encoding="utf-8") as f:
+        json.dump({"dialogue": "Önceden Çevrilmiş Metin"}, f)
+
+    translator = GeminiTranslator()
+    cache_path = "tests/test_resume_cache.db"
+
+    # process_json_directory çağrıldığında dosya atlanmalı ve üzerine yazılmamalı
+    process_json_directory(test_raw_dir, test_tr_dir, translator, cache_db_path=cache_path)
+
+    # İçeriğin bozulmadığını kontrol et
+    with open(dummy_tr_file, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    assert data["dialogue"] == "Önceden Çevrilmiş Metin", "HATA: Zaten var olan dosya atlanmadı veya üzerine yazıldı!"
+    print(f"SUCCESS: {dummy_raw_file.name} başarıyla tespit edildi ve atlandı!")
+
+    # Temizlik
+    if test_raw_dir.exists():
+        shutil.rmtree(test_raw_dir)
+    if test_tr_dir.exists():
+        shutil.rmtree(test_tr_dir)
+    if os.path.exists(cache_path):
+        os.remove(cache_path)
 
 
 if __name__ == "__main__":
     test_sanitizer()
     test_cache()
     test_full_pipeline()
+    test_file_resume()
+    print("\n=======================================================")
+    print("  TÜM ÇEKİRDEK ÇEVİRİ MOTORU VE RESUME TESTLERİ GEÇTİ!  ")
+    print("=======================================================\n")
+

@@ -39,7 +39,7 @@ def translate_json_content(
     json_data: Any, 
     translator: GeminiTranslator, 
     cache: TranslationCache, 
-    batch_size: int = 20
+    batch_size: int = 25
 ) -> Any:
     """
     JSON yapısı içindeki metinleri tespit eder, etiketlerini maskeler, 
@@ -91,7 +91,12 @@ def translate_json_content(
             to_translate_masked.append(item["masked"])
             to_translate_indices.append(idx)
 
-    logger.info(f"Önbellek İsabeti: {cache_hits} | Çevrilecek Yeni Metin: {len(to_translate_masked)}")
+    if cache_hits > 0:
+        hit_msg = f"[INFO] [CACHE HIT] {cache_hits} satır önbellekten okundu (0 token)"
+        print(hit_msg)
+        logger.info(hit_msg)
+    else:
+        logger.info(f"Önbellek İsabeti: {cache_hits} | Çevrilecek Yeni Metin: {len(to_translate_masked)}")
 
     # 3. LLM Çevirisi (Batch)
     if to_translate_masked:
@@ -115,8 +120,8 @@ def process_json_directory(
     json_in_dir: Path, 
     json_out_dir: Path, 
     translator: GeminiTranslator, 
-    cache_db_path: str,
-    batch_size: int = 20
+    cache_db_path: str = None,
+    batch_size: int = 25
 ):
     """
     Export edilen tüm JSON dosyalarını tarar ve çevirerek hedef klasöre kaydeder.
@@ -126,6 +131,16 @@ def process_json_directory(
 
     with TranslationCache(cache_db_path) as cache:
         for json_file in json_files:
+            rel_path = json_file.relative_to(json_in_dir)
+            out_file = json_out_dir / rel_path
+
+            # Dosya seviyesinde resume: Zaten diskte varsa ve içi doluysa atla
+            if out_file.exists() and out_file.stat().st_size > 0:
+                skip_msg = f"[INFO] {json_file.name} zaten çevrilmiş, atlanıyor."
+                print(skip_msg)
+                logger.info(skip_msg)
+                continue
+
             logger.info(f"Çevriliyor: {json_file.name}")
             try:
                 with open(json_file, "r", encoding="utf-8") as f:
@@ -133,10 +148,7 @@ def process_json_directory(
 
                 translated_data = translate_json_content(data, translator, cache, batch_size=batch_size)
 
-                rel_path = json_file.relative_to(json_in_dir)
-                out_file = json_out_dir / rel_path
                 out_file.parent.mkdir(parents=True, exist_ok=True)
-
                 with open(out_file, "w", encoding="utf-8") as f:
                     json.dump(translated_data, f, ensure_ascii=False, indent=2)
 
@@ -156,7 +168,7 @@ def main():
     parser.add_argument("--output-dir", "-o", type=str, default="output", help="Çalışma ve mod çıktı klasörü (varsayılan: output)")
     parser.add_argument("--engine", "-e", type=str, default="re_engine", choices=["re_engine"], help="Oyun motoru adaptörü")
     parser.add_argument("--list-file", "-l", type=str, default="OWOTS_STM_Release", help="Unpacker için proje/liste etiketi")
-    parser.add_argument("--batch-size", "-b", type=int, default=20, help="LLM çeviri paket boyutu (varsayılan: 20)")
+    parser.add_argument("--batch-size", "-b", type=int, default=25, help="LLM çeviri paket boyutu (varsayılan: 25)")
     parser.add_argument("--cache-db", type=str, default="translation_cache.db", help="Önbellek veritabanı dosyası")
     parser.add_argument("--api-key", type=str, help="Gemini API Anahtarı")
     parser.add_argument("--skip-extract", action="store_true", help="Arşiv çıkarma adımını atla")

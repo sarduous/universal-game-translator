@@ -52,7 +52,7 @@ def test_api_connection(api_key: str) -> bool:
     try:
         from google import genai
         client = genai.Client(api_key=api_key)
-        for model in ["gemini-2.5-flash-lite", "gemini-flash-lite-latest", "gemini-1.5-flash"]:
+        for model in ["gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemini-3.7-flash"]:
             try:
                 response = client.models.generate_content(
                     model=model,
